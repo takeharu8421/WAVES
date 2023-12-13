@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <title>WAVE</title>
+        <style>
+            body {
+                margin: 0px;
+                overflow: hidden;
+                background-color: #2a2a2a;
+            }
+            #canvas {
+                background-color: #313131;
+                display: block;
+                margin: 0 auto;
+                border: 1px solid #2a2a2a;
+            }
+            #controls {
+                text-align: center;
+                padding: 10px;
+                display: flex;
+                flex-direction: column;
+            }
+            #keywordInput {
+                padding: 0.8em 2em;
+                background-color: #FFFFFF;
+                border-radius: 10px;
+                text-decoration: none; /* 文字の下線を消す */
+                margin-bottom: 20px;
+            }
+            .topHalf {
+                margin-top: 10px;
+                margin-bottom: 10px;
+            }
+            .bottomHalf {
+                margin-top: 10px;
+                margin-bottom: 5px;
+            }
+            button {
+                margin: 0 20px 40px;
+                padding: 1em 2em;
+                border: none;
+                display: inline-block;
+                background-color: #48907a;
+                box-shadow: 0 6px #326354;
+                font-size: 114%;
+                line-height: 1;
+                color: #bdbdbd;
+                position: relative;
+                cursor: pointer;
+            }
+            .btn {
+                margin-top: 10px;
+                display: inline-block;
+                border-radius: 2px;
+                box-shadow: 0 6px #326354;
+                top: 0;
+                transition: .2s all;
+            }
+            .btn:hover {
+                box-shadow: 0 5px #326354;
+                top: 1px;
+            }
+            .btn:active {
+                box-shadow: 0 0 #326354;
+                top: 6px;
+            }
+
+            .modal {
+                display: none;
+                position: fixed;
+                z-index: 1;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                overflow: auto;
+                background-color: rgba(0,0,0,0.4);
+            }
+
+            .modal-header {
+                text-align: center;  /* テキストを中央に配置 */
+                font-size: 20px;    /* フォントサイズを設定 */
+                margin-bottom: 20px; /* 下部との余白を設定 */
+            }
+
+            .modal-content {
+                background-color:   #252525;
+                margin: 15% auto;
+                padding: 20px;
+                width: 80%;
+                max-height: 60%;  /* モーダルの最大高さを設定 */
+                overflow: auto;   /* コンテンツがオーバーフローした場合にスクロールバーを表示 */
+                display: flex;
+                flex-direction: column;
+            }
+
+            .close {
+                color: #aaa;
+                float: right;
+                font-size: 28px;
+                font-weight: bold;
+                padding: 0 15px;
+                cursor: pointer;
+                align-self: flex-end;
+            }
+
+            .close:hover,
+            .close:focus {
+                color: black;
+                text-decoration: none;
+                cursor: pointer;
+            }
+
+            .file-btn {
+                padding: 10px;
+                margin: 5px;
+                background-color: #fffff0;
+                border: none;
+                text-align: left;
+            }
+            .two-column {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                grid-gap: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <!--------------HTML-------------->
+        <input type="file" id="impulse-file" accept=".wav">
+        <div id="controls">
+            <div class="topHalf">
+                <button class="btn btn-border-red" id="memoryButton">保存する</button>
+            </div>
+        </div>
+        <canvas id="canvas"></canvas>
+        <div id="listModal" class="modal">
+            <div class="modal-content">
+                <button class="btn btn-border-red" id="beginButton">はじめから</button>
+                <button class="btn btn-border-red" id="continueButton">つづきから</button>
+                <button class="btn btn-border-red" id="visitButton">だれかの</button>
+            </div>
+        </div>
+        <div id="loadModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <input type="text" id="keywordInput" placeholder="キーワードを入力してください">
+                <button class="btn btn-border-red" id="loadButton">読み込み</button>
+            </div>
+        </div>
+        <!--------------HTML-------------->
+
+        <!--------------JavaScript-------------->
+        <script>
+            "use strict";
+            var ctx;
+            window.onload = main;
+
+            // Web Audio API の初期化
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+            const globalGainNode = audioCtx.createGain();
+            globalGainNode.connect(audioCtx.destination);
+            globalGainNode.gain.value = 0.5; // 音量を半分にする
+
+            let convolver;
+            let isReverbLoaded = false;
+
+            document.getElementById('impulse-file').addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (!file) {
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(fileEvent) {
+                    const arrayBuffer = fileEvent.target.result;
+                    audioCtx.decodeAudioData(arrayBuffer, function(audioBuffer) {
+                        convolver = audioCtx.createConvolver();
+                        convolver.buffer = audioBuffer;
+                        isReverbLoaded = true;
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            // Cメジャースケールの周波数（C4からC8まで）
+            //var scale = [261.626,293.665,329.628,349.228,391.995,440.000,493.883,523.251,587.330,659.255,698.456,783.991,880.000,987.767,1046.502,1174.659,1318.510,1396.913,1567.982,1760.000,1975.533]//,2093.005,2349.318,2637.020,2793.826,3135.963,3520.000,3951.066,4186.009];
+            var scale = [130.813,138.591,174.614,195.998,207.652,261.626,277.183,349.228,391.995,415.305,523.251,554.365,698.456,783.991,830.609,1046.502,1108.731,1396.913,1567.982,1661.219,2093.005]
+            scale = scale.reverse(); 
+
+            const maxConcurrentSounds = 5; // 同時に鳴らす最大音数
+            let currentSounds = 0; // 現在鳴っている音の数
+
+            // 波紋の大きさに基づいて音階のインデックスを取得する関数
+            function getScaleIndex(radius) {
+                // 波紋の大きさに基づいてスケールのインデックスを計算
+                let index =Math.floor(radius/canvas.width*scale.length);
+                return index;
+            }
+
+            // 指定された音階で音を再生する関数
+            function playSound(radius) {
+                if (currentSounds >= maxConcurrentSounds) {
+                   return; // 最大音数に達した場合は新しい音を鳴らさない
+                }
+
+                currentSounds++;
+                const oscillator = audioCtx.createOscillator();
+                oscillator.type = 'sine'; // 波形タイプ（例：'sine', 'square', 'sawtooth', 'triangle'）
+                const scaleIndex = getScaleIndex(radius);
+                oscillator.frequency.setValueAtTime(scale[scaleIndex], audioCtx.currentTime);
+
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.setValueAtTime(0, audioCtx.currentTime); // 音量を0から開始
+                gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.01); // 0.01秒で音量を1まで上げる
+                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1); // 0.2秒後に音量を0まで下げる
+
+                oscillator.connect(gainNode);
+                
+                if (isReverbLoaded) {
+                    gainNode.connect(convolver);
+                    convolver.connect(globalGainNode);
+                } else {
+                    gainNode.connect(globalGainNode);
+                }
+
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.1); // 0.2秒後にオシレーターを停止
+            
+                oscillator.onended = () => {
+                  currentSounds--; // 音が終了したらカウンターを減らす
+                };
+            }
+
+            class Wave {
+                constructor(x, y, radius, id) {
+                    this.x = x;
+                    this.y = y;
+                    this.radius = radius;
+                    this.id = id;
+                    this.color = this.getRandomColor();
+                }
+
+                move() {
+                    this.radius += 0.001*canvas.width; // 波紋の大きさを増加
+                }
+
+                getRandomColor() {
+                    const letters = '0123456789ABCDEF';
+                    let color = '#';
+                    for (let i = 0; i < 6; i++) {
+                        color += letters[Math.floor(Math.random() * 16)];
+                    }
+                    return color;
+                }
+            }
+
+            let waves = [];
+            let collidedPairs = new Set(); // 衝突したペアを記録するセット
+
+            function checkCollisions() {
+                for (let i = 0; i < waves.length; i++) {
+                    for (let j = i + 1; j < waves.length; j++) {
+                        let dx = waves[i].x - waves[j].x;
+                        let dy = waves[i].y - waves[j].y;
+                        let distance = Math.sqrt(dx * dx + dy * dy);
+                        let pairKey = waves[i].id + '-' + waves[j].id; // ペアのキーを生成
+
+                        if (!collidedPairs.has(pairKey) && distance < waves[i].radius + waves[j].radius && distance+Math.min(waves[i].radius,waves[j].radius) > Math.max(waves[i].radius,waves[j].radius)) {
+                            console.log('触れた');
+                            collidedPairs.add(pairKey); // 衝突したペアを記録
+
+                            // 音を鳴らす
+                            playSound(waves[i].radius);
+                            playSound(waves[j].radius);
+                        }
+                    }
+                }
+            }
+
+            function drawWave() {
+                waves.forEach(wave => {
+                    ctx.beginPath();
+                    ctx.arc(wave.x, wave.y, wave.radius, 0, 2 * Math.PI);
+                    ctx.strokeStyle = wave.color;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    wave.move();
+                });
+
+                checkCollisions(); // 波紋間の衝突をチェック
+
+                // 波紋が一定の大きさを超えたら配列から削除
+                waves = waves.filter(wave => {
+                    if (wave.radius < canvas.width) {
+                        return true;
+                    } else {
+                        // この波紋に関連する衝突記録をクリア
+                        collidedPairs.forEach(pair => {
+                            if (pair.includes(wave.id.toString())) {
+                                collidedPairs.delete(pair);
+                            }
+                        });
+                        return false;
+                    }
+                });
+            }
+
+            var record = {
+                keyword: "",
+                actions: []
+            };
+    
+
+            var myrecord = {
+                actions: []
+            };
+
+            const loopLength = 60 /80 *16 *1000;
+            const maxActions = 8;
+
+            // 操作を記録する関数（例: 波紋を生成する操作）
+            function recordAction(posX,posY) {
+                console.log("record"+Date.now());
+                console.log("record");
+                myrecord.actions.push({
+                    timestamp: Date.now()%loopLength,
+                    coordinates: {
+                        x: posX,
+                        y: posY
+                    }
+                });
+                if(myrecord.actions.length > maxActions){
+                    myrecord.actions = myrecord.actions.slice(-maxActions);
+                };
+                console.log(myrecord);
+            }
+
+            // 記録された操作をループ再生する
+            function loopPlayback() {
+                console.log("loop"+Date.now()%loopLength);
+                // 次のチェックまで待機し、再度ループ再生を呼び出す
+                setTimeout(loopPlayback, loopLength-Date.now()%loopLength);
+                record.actions.forEach(action => {
+                    setTimeout(() => {
+                        const x = action.coordinates.x * canvas.width /10000;
+                        const y = action.coordinates.y * canvas.height /10000;
+                        const id = idcount++;
+                        const newWave = new Wave(x, y, 10, id); // 初期半径は 10
+                        waves.push(newWave);
+                    }, action.timestamp);
+                });
+
+                myrecord.actions.forEach(action => {
+                    setTimeout(() => {
+                        const x = action.coordinates.x * canvas.width /10000;
+                        const y = action.coordinates.y * canvas.height /10000;
+                        const id = idcount++;
+                        const newWave = new Wave(x, y, 10, id); // 初期半径は 10
+                        waves.push(newWave);
+                    }, action.timestamp);
+                });
+
+                console.log(waves);
+            }
+
+            function loadPlayback() {
+                console.log("load"+Date.now()%loopLength);
+                // 今ループの波を設定する
+                record.actions.forEach(action => {
+                    if(action.timestamp - (Date.now()%loopLength) < 0)return;
+                    setTimeout(() => {
+                        const x = action.coordinates.x * canvas.width /10000;
+                        const y = action.coordinates.y * canvas.height /10000;
+                        const id = idcount++;
+                        const newWave = new Wave(x, y, 10, id); // 初期半径は 10
+                        waves.push(newWave);
+                    }, action.timestamp - (Date.now()%loopLength));
+                });
+                console.log(waves);
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawWave();
+                requestAnimationFrame(draw);
+            }
+
+            var getAcctionsURL="https://r7okpgo51a.execute-api.ap-northeast-1.amazonaws.com/waves-readAPI";
+            var storeAcctionsURL="https://368yywm5k0.execute-api.ap-northeast-1.amazonaws.com/waves-storeAPI";
+
+            var listModal = document.getElementById("listModal");
+            const beginButton = document.getElementById("beginButton");
+            const continueButton = document.getElementById("continueButton");
+            const visitButton = document.getElementById("visitButton");
+
+            var loadModal = document.getElementById("loadModal");
+            const keywordInput = document.getElementById("keywordInput");
+            const loadButton = document.getElementById("loadButton");
+            var closeLoadModal = loadModal.querySelector(".close");
+
+            const memoryButton = document.getElementById("memoryButton");
+
+            var idcount = 0;
+
+            beginButton.addEventListener('click', () => {
+                listModal.style.display = "none";
+            });
+
+            continueButton.addEventListener('click', () => {
+                loadModal.style.display = "block";
+                listModal.style.display = "none";
+            });
+
+            loadButton.addEventListener('click', () => {
+                let keyword = keywordInput.value;
+                if(!keyword)return;
+
+                let dataToSend = {
+                    keyword:keyword
+                };
+                console.log("Sending data:", dataToSend);
+                loadModal.style.display = "none";
+                fetch(getAcctionsURL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dataToSend)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Success:', data);
+                    listModal.style.display = "none";
+                    record.actions = data.actions;
+                    record.keyword = data.keyword;
+                    loadPlayback();
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    listModal.style.display = "block";
+                    alert("キーワードが間違っています");
+                });
+            });
+
+            visitButton.addEventListener('click', () => {
+                let dataToSend = {
+                    keyword:""
+                };
+                console.log("Sending data:", dataToSend);
+                
+                fetch(getAcctionsURL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dataToSend)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Success:', data);
+                    listModal.style.display = "none";
+                    record.actions = data.actions;
+                    record.keyword = data.keyword;
+                    loadPlayback();
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+            });
+
+            memoryButton.addEventListener('click', () => {
+                if (!record.actions && !myrecord.actions) return;
+                record.actions = record.actions.concat(myrecord.actions);
+                myrecord.actions = [];
+
+                let dataToSend = record;
+                console.log("Sending data:", dataToSend);
+                fetch(storeAcctionsURL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dataToSend)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Success:', data);
+                    if("keyword" in data){
+                        record.keyword = data.keyword;
+                        alert("キーワードは"+data.keyword+"です");
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+            });
+
+            closeLoadModal.addEventListener("click", function() {
+                loadModal.style.display = "none";
+                listModal.style.display = "block";
+            });
+
+            // キャンバスの設定
+            function main() {
+                listModal.style.display = "block";
+                // キャンバスのサイズと位置を設定する関数
+                function resizeCanvas() {
+                    canvas.width = window.innerWidth * 0.8;
+                    canvas.height = canvas.width*0.75;
+                    canvas.style.position = "absolute";
+                    canvas.style.top = "20%";
+                    canvas.style.left = "10%";
+                }
+                // ウィンドウのリサイズイベントに対応する
+                window.addEventListener('resize', resizeCanvas, false);
+                canvas.addEventListener('click', function(event) {
+                    console.log("click"+Date.now());
+                    
+                    const rect = canvas.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    const id = idcount++;
+                    const newWave = new Wave(x, y, 10, id); // 初期半径は 10
+                    waves.push(newWave);
+
+                    recordAction(Math.floor(x/canvas.width*10000),Math.floor(y/canvas.height*10000));
+                });
+
+                // 初期のキャンバスサイズと位置を設定
+                resizeCanvas();
+                ctx = canvas.getContext("2d");
+                draw(); // 描画ループを開始
+                loopPlayback();
+
+                /*
+                setInterval(() => {
+                    const oscillator = audioCtx.createOscillator();
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(scale[0], audioCtx.currentTime);
+
+                    const gainNode = audioCtx.createGain();
+                    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime); // 音量を0から開始
+                    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1); // 0.2秒後に音量を0まで下げる
+
+                    oscillator.connect(gainNode);
+                    
+                    gainNode.connect(globalGainNode);
+
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.1); // 0.2秒後にオシレーターを停止
+                }, 60 /80 *1000);
+                */
+            };
+            
+        </script>
+        <!--------------JavaScript-------------->
+    </body>
+</html>
