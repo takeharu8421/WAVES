@@ -174,8 +174,6 @@
             // GitHub Pages上のIRファイルのURL
             const irFileUrl = 'https://takeharu8421.github.io/WAVES/ir.wav';
 
-            
-            // Cメジャースケールの周波数（C4からC8まで）
             var scale = [130.813,138.591,174.614,195.998,207.652,261.626,277.183,349.228,391.995,415.305,523.251,554.365,698.456,783.991,830.609,1046.502,1108.731,1396.913,1567.982,1661.219,2093.005]
             scale = scale.reverse(); 
 
@@ -288,7 +286,7 @@
                         let pairKey = waves[i].id + '-' + waves[j].id; // ペアのキーを生成
 
                         if (!collidedPairs.has(pairKey) && distance < waves[i].radius + waves[j].radius && distance+Math.min(waves[i].radius,waves[j].radius) > Math.max(waves[i].radius,waves[j].radius)) {
-                            console.log('触れた');
+                            //console.log('触れた');
                             collidedPairs.add(pairKey); // 衝突したペアを記録
 
                             // 音を鳴らす
@@ -329,8 +327,8 @@
 
             // 操作を記録する関数（例: 波紋を生成する操作）
             function recordAction(posX,posY) {
-                console.log("record"+Date.now());
-                console.log("record");
+                //console.log("record"+Date.now());
+                //console.log("record");
                 myrecord.actions.push({
                     timestamp: Date.now()%loopLength,
                     coordinates: {
@@ -341,12 +339,12 @@
                 if(myrecord.actions.length > maxActions){
                     myrecord.actions = myrecord.actions.slice(-maxActions);
                 };
-                console.log(myrecord);
+                //console.log(myrecord);
             }
 
             // 記録された操作をループ再生する
             function loopPlayback() {
-                console.log("loop"+Date.now()%loopLength);
+                //console.log("loop"+Date.now()%loopLength);
                 // 次のチェックまで待機し、再度ループ再生を呼び出す
                 setTimeout(loopPlayback, loopLength-Date.now()%loopLength);
                 record.actions.forEach(action => {
@@ -369,11 +367,11 @@
                     }, action.timestamp);
                 });
 
-                console.log(waves);
+                //console.log(waves);
             }
 
             function loadPlayback() {
-                console.log("load"+Date.now()%loopLength);
+                //console.log("load"+Date.now()%loopLength);
                 // 今ループの波を設定する
                 record.actions.forEach(action => {
                     if(action.timestamp - (Date.now()%loopLength) < 0)return;
@@ -385,7 +383,7 @@
                         waves.push(newWave);
                     }, action.timestamp - (Date.now()%loopLength));
                 });
-                console.log(waves);
+                //console.log(waves);
             }
 
             function draw() {
@@ -528,7 +526,7 @@
                 // ウィンドウのリサイズイベントに対応する
                 window.addEventListener('resize', resizeCanvas, false);
                 canvas.addEventListener('click', function(event) {
-                    console.log("click"+Date.now());
+                    //console.log("click"+Date.now());
                     
                     const rect = canvas.getBoundingClientRect();
                     const x = event.clientX - rect.left;
